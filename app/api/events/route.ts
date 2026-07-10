@@ -1,58 +1,92 @@
+/* eslint-disable prefer-const */
 import { NextRequest, NextResponse } from "next/server";
+import { v2 as cloudinary } from "cloudinary";
+
 import connectDB from "@/lib/mongodb";
 import Event from "@/database/event.model";
 
-async function parseEventBody(request: NextRequest) {
-  const contentType = request.headers.get("content-type") ?? "";
-
-  if (contentType.includes("application/json")) {
-    return request.json();
-  }
-
-  if (
-    contentType.includes("multipart/form-data") ||
-    contentType.includes("application/x-www-form-urlencoded")
-  ) {
-    const formData = await request.formData();
-    return Object.fromEntries(formData.entries());
-  }
-
-  return null;
-}
-
-async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
     await connectDB();
 
-    let event;
-    try {
-      event = await parseEventBody(request);
-    } catch {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
-    }
+    const formData = await req.formData();
 
-    if (!event) {
+    let event;
+
+    try {
+      event = Object.fromEntries(formData.entries());
+    } catch (e) {
       return NextResponse.json(
-        {
-          error: "Unsupported Content-Type",
-          message:
-            'Use "application/json", "multipart/form-data", or "application/x-www-form-urlencoded".',
-        },
-        { status: 415 },
+        { message: "Invalid JSON data format" },
+        { status: 400 },
       );
     }
 
-    const createdEvent = await Event.create(event);
+    const file = formData.get("image") as File;
+
+    if (!file)
+      return NextResponse.json(
+        { message: "Image file is required" },
+        { status: 400 },
+      );
+
+    let tags = JSON.parse(formData.get("tags") as string);
+    let agenda = JSON.parse(formData.get("agenda") as string);
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const uploadResult = await new Promise((resolve, reject) => {
+      cloudinary.uploader
+        .upload_stream(
+          { resource_type: "image", folder: "DevEvent" },
+          (error, results) => {
+            if (error) return reject(error);
+
+            resolve(results);
+          },
+        )
+        .end(buffer);
+    });
+
+    event.image = (uploadResult as { secure_url: string }).secure_url;
+
+    const createdEvent = await Event.create({
+      ...event,
+      tags: tags,
+      agenda: agenda,
+    });
+
     return NextResponse.json(
       { message: "Event created successfully", event: createdEvent },
       { status: 201 },
     );
-  } catch (error) {
+  } catch (e) {
+    console.error(e);
     return NextResponse.json(
-      { error: "Failed to create event", message: (error as Error).message },
+      {
+        message: "Event Creation Failed",
+        error: e instanceof Error ? e.message : "Unknown",
+      },
       { status: 500 },
     );
   }
 }
 
-export { POST };
+export async function GET() {
+  try {
+    await connectDB();
+
+    const events = await Event.find().sort({ createdAt: -1 });
+
+    return NextResponse.json(
+      { message: "Events fetched successfully", events },
+      { status: 200 },
+    );
+  } catch (e) {
+    return NextResponse.json(
+      { message: "Event fetching failed", error: e },
+      { status: 500 },
+    );
+  }
+}
