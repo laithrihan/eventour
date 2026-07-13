@@ -4,6 +4,7 @@ import {
   DomainError,
   ValidationError,
 } from "@/domain/shared/errors/DomainError";
+import { requireApiToken } from "@/lib/api-auth";
 
 /**
  * POST creates an event from multipart form data:
@@ -12,6 +13,9 @@ import {
  * 3) delegate validation + persistence to CreateEvent use-case
  */
 export async function POST(req: NextRequest) {
+  const unauthorized = requireApiToken(req);
+  if (unauthorized) return unauthorized;
+
   try {
     const formData = await req.formData();
     const file = formData.get("image");
@@ -84,7 +88,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const unauthorized = requireApiToken(req);
+  if (unauthorized) return unauthorized;
+
   try {
     const { listEvents } = getContainer();
     const events = await listEvents();

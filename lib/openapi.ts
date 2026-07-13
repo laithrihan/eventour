@@ -61,6 +61,15 @@ const errorSchema: OpenAPIV3.SchemaObject = {
   required: ["message"],
 };
 
+const unauthorizedResponse: OpenAPIV3.ResponseObject = {
+  description: "Missing or invalid API token",
+  content: {
+    "application/json": {
+      schema: { $ref: "#/components/schemas/Error" },
+    },
+  },
+};
+
 export function getOpenApiSpec(baseUrl: string): OpenAPIV3.Document {
   return {
     openapi: "3.0.3",
@@ -68,7 +77,7 @@ export function getOpenApiSpec(baseUrl: string): OpenAPIV3.Document {
       title: "Eventour API",
       version: "1.0.0",
       description:
-        "REST API for browsing and creating developer events on Eventour.",
+        "REST API for browsing and creating developer events on Eventour. All endpoints require an API token via `Authorization: Bearer <token>` or the `x-api-key` header.",
     },
     servers: [
       {
@@ -82,6 +91,7 @@ export function getOpenApiSpec(baseUrl: string): OpenAPIV3.Document {
         description: "List, create, and retrieve events",
       },
     ],
+    security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }],
     paths: {
       "/api/events": {
         get: {
@@ -107,6 +117,7 @@ export function getOpenApiSpec(baseUrl: string): OpenAPIV3.Document {
                 },
               },
             },
+            "401": unauthorizedResponse,
             "500": {
               description: "Server error",
               content: {
@@ -200,6 +211,7 @@ export function getOpenApiSpec(baseUrl: string): OpenAPIV3.Document {
                 },
               },
             },
+            "401": unauthorizedResponse,
             "422": {
               description: "Domain validation error",
               content: {
@@ -257,6 +269,7 @@ export function getOpenApiSpec(baseUrl: string): OpenAPIV3.Document {
                 },
               },
             },
+            "401": unauthorizedResponse,
             "404": {
               description: "Event not found",
               content: {
@@ -278,6 +291,20 @@ export function getOpenApiSpec(baseUrl: string): OpenAPIV3.Document {
       },
     },
     components: {
+      securitySchemes: {
+        BearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "API Token",
+          description: "API token from the `API_TOKEN` environment variable",
+        },
+        ApiKeyAuth: {
+          type: "apiKey",
+          in: "header",
+          name: "x-api-key",
+          description: "Same value as `API_TOKEN`",
+        },
+      },
       schemas: {
         Event: eventSchema,
         Error: errorSchema,

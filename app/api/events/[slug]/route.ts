@@ -4,15 +4,19 @@ import {
   NotFoundError,
   ValidationError,
 } from "@/domain/shared/errors/DomainError";
+import { requireApiToken } from "@/lib/api-auth";
 
 type RouteContext = {
   params: Promise<{ slug: string }>;
 };
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: RouteContext,
 ): Promise<NextResponse> {
+  const unauthorized = requireApiToken(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const { slug: rawSlug } = await context.params;
     const { getEventBySlug } = getContainer();
