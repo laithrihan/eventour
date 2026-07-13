@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { Schibsted_Grotesk, Martian_Mono, Geist } from "next/font/google";
 import "./globals.css";
-import { cn } from "@/lib/utils";
-import LightRaus from "./components/ui/LightRays";
-import Navbar from "@/components/Navbar";
+import { cn } from "@/shared/utils/cn";
+import LightRays from "@/components/ui/LightRays";
+import Navbar from "@/components/layout/Navbar";
+
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 const SchibstedGrotesk = Schibsted_Grotesk({
@@ -42,7 +43,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <Navbar />
         <div className="absolute inset-0 z-[-1] top-0 min-h-screen">
-          <LightRaus />
+          <LightRays />
         </div>
         <main>{children}</main>
       </body>

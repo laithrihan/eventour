@@ -1,68 +1,79 @@
-/* eslint-disable prefer-const */
 import { NextRequest, NextResponse } from "next/server";
-import { v2 as cloudinary } from "cloudinary";
+import { getContainer } from "@/infrastructure/composition/container";
+import {
+  DomainError,
+  ValidationError,
+} from "@/domain/shared/errors/DomainError";
 
-import connectDB from "@/lib/mongodb";
-import Event from "@/database/event.model";
-
+/**
+ * POST creates an event from multipart form data:
+ * 1) read scalar fields + JSON-encoded tags/agenda
+ * 2) require an image file and buffer it for Cloudinary
+ * 3) delegate validation + persistence to CreateEvent use-case
+ */
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
-
     const formData = await req.formData();
+    const file = formData.get("image");
 
-    let event;
-
-    try {
-      event = Object.fromEntries(formData.entries());
-    } catch (e) {
-      return NextResponse.json(
-        { message: "Invalid JSON data format" },
-        { status: 400 },
-      );
-    }
-
-    const file = formData.get("image") as File;
-
-    if (!file)
+    if (!(file instanceof File)) {
       return NextResponse.json(
         { message: "Image file is required" },
         { status: 400 },
       );
+    }
 
-    let tags = JSON.parse(formData.get("tags") as string);
-    let agenda = JSON.parse(formData.get("agenda") as string);
+    const tagsRaw = formData.get("tags");
+    const agendaRaw = formData.get("agenda");
+
+    let tags: string[];
+    let agenda: string[];
+
+    try {
+      tags = JSON.parse(String(tagsRaw));
+      agenda = JSON.parse(String(agendaRaw));
+    } catch {
+      return NextResponse.json(
+        { message: "Invalid tags or agenda JSON" },
+        { status: 400 },
+      );
+    }
 
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const imageBuffer = Buffer.from(arrayBuffer);
 
-    const uploadResult = await new Promise((resolve, reject) => {
-      cloudinary.uploader
-        .upload_stream(
-          { resource_type: "image", folder: "DevEvent" },
-          (error, results) => {
-            if (error) return reject(error);
-
-            resolve(results);
-          },
-        )
-        .end(buffer);
-    });
-
-    event.image = (uploadResult as { secure_url: string }).secure_url;
-
-    const createdEvent = await Event.create({
-      ...event,
-      tags: tags,
-      agenda: agenda,
+    const { createEvent } = getContainer();
+    const event = await createEvent({
+      title: String(formData.get("title") ?? ""),
+      description: String(formData.get("description") ?? ""),
+      overview: String(formData.get("overview") ?? ""),
+      venue: String(formData.get("venue") ?? ""),
+      location: String(formData.get("location") ?? ""),
+      date: String(formData.get("date") ?? ""),
+      time: String(formData.get("time") ?? ""),
+      mode: String(formData.get("mode") ?? ""),
+      audience: String(formData.get("audience") ?? ""),
+      organizer: String(formData.get("organizer") ?? ""),
+      tags,
+      agenda,
+      imageBuffer,
     });
 
     return NextResponse.json(
-      { message: "Event created successfully", event: createdEvent },
+      { message: "Event created successfully", event },
       { status: 201 },
     );
   } catch (e) {
     console.error(e);
+
+    if (e instanceof ValidationError) {
+      return NextResponse.json({ message: e.message }, { status: 400 });
+    }
+
+    if (e instanceof DomainError) {
+      return NextResponse.json({ message: e.message }, { status: 422 });
+    }
+
     return NextResponse.json(
       {
         message: "Event Creation Failed",
@@ -75,9 +86,8 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   try {
-    await connectDB();
-
-    const events = await Event.find().sort({ createdAt: -1 });
+    const { listEvents } = getContainer();
+    const events = await listEvents();
 
     return NextResponse.json(
       { message: "Events fetched successfully", events },
