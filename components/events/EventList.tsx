@@ -6,11 +6,11 @@ type EventListProps = {
   className?: string;
 };
 
-const EventList = ({ events, className = "events list-none" }: EventListProps) => {
+const EventList = ({ events}: EventListProps) => {
   if (!events.length) return null;
 
   return (
-    <ul className={className}>
+    <ul className="events list-none">
       {events.map((event) => (
         <li key={event.id}>
           <EventCard
